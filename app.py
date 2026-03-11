@@ -69,6 +69,9 @@ with app.app_context():
 
 # --- AI ENGINE ---
 def run_ai_engine():
+    # Add 'nrows=10000' to stop the RAM from exploding
+    train_df = pd.read_csv(TRAIN_PATH, nrows=5000)
+    test_df = pd.read_csv(TEST_PATH, nrows=2000)
     TRAIN_PATH, TEST_PATH = BASE_DIR / "train.csv", BASE_DIR / "test.csv"
     print(f"Checking for files at: {TRAIN_PATH}")
     if not TRAIN_PATH.exists():
