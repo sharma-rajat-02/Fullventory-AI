@@ -23,9 +23,12 @@ CORS(app)
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECEIVER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
-BASE_DIR = Path(os.getenv("BASE_DIRECTORY", r"C:/Users/Dell/Python/Inventory Stock Startup"))
+# This automatically finds the folder where app.py is sitting
+BASE_DIR = Path(__file__).resolve().parent
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.as_posix()}/inventory.db"
+# Keep your other config the same
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.joinpath('inventory.db').as_posix()}"
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
