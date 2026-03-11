@@ -24,9 +24,10 @@ SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECEIVER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 # This automatically finds the folder where app.py is sitting
+# This tells Python to look in the folder where app.py itself is located
 BASE_DIR = Path(__file__).resolve().parent
 
-# Keep your other config the same
+# Dynamic database path
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.joinpath('inventory.db').as_posix()}"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -69,7 +70,10 @@ with app.app_context():
 # --- AI ENGINE ---
 def run_ai_engine():
     TRAIN_PATH, TEST_PATH = BASE_DIR / "train.csv", BASE_DIR / "test.csv"
-    if not TRAIN_PATH.exists(): return
+    print(f"Checking for files at: {TRAIN_PATH}")
+    if not TRAIN_PATH.exists():
+        print("ERROR: train.csv not found!")
+        return
     config = Settings.query.first()
     threshold = config.threshold_days if config else 10
     train_df, test_df = pd.read_csv(TRAIN_PATH), pd.read_csv(TEST_PATH)
