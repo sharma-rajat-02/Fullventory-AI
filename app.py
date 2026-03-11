@@ -25,10 +25,16 @@ RECEIVER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 # This automatically finds the folder where app.py is sitting
 # This tells Python to look in the folder where app.py itself is located
-BASE_DIR = Path(__file__).resolve().parent
 
-# Dynamic database path
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.joinpath('inventory.db').as_posix()}"
+# This finds the EXACT folder where app.py is sitting on Render
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Update your database and CSV paths to be ABSOLUTE
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'inventory.db')}"
+
+# Inside your run_ai_engine() function, use this:
+TRAIN_PATH = os.path.join(BASE_DIR, "train.csv")
+TEST_PATH = os.path.join(BASE_DIR, "test.csv")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -69,14 +75,17 @@ with app.app_context():
 
 # --- AI ENGINE ---
 def run_ai_engine():
+    TRAIN_PATH = os.path.join(BASE_DIR, "train.csv")
+    print(f"AI ENGINE STARTING: Looking for {TRAIN_PATH}") # THIS WILL SHOW IN RENDER LOGS
+    
+    if not os.path.exists(TRAIN_PATH):
+        print("CRITICAL ERROR: train.csv not found at the path above!")
+        return
+    # ... rest of your code ...
     # Add 'nrows=10000' to stop the RAM from exploding
     train_df = pd.read_csv(TRAIN_PATH, nrows=5000)
     test_df = pd.read_csv(TEST_PATH, nrows=2000)
-    TRAIN_PATH, TEST_PATH = BASE_DIR / "train.csv", BASE_DIR / "test.csv"
-    print(f"Checking for files at: {TRAIN_PATH}")
-    if not TRAIN_PATH.exists():
-        print("ERROR: train.csv not found!")
-        return
+    
     config = Settings.query.first()
     threshold = config.threshold_days if config else 10
     train_df, test_df = pd.read_csv(TRAIN_PATH), pd.read_csv(TEST_PATH)
