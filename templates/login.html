@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login | StockSense</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body style="display:flex; justify-content:center; align-items:center; height:100vh;">
+    <div class="container" style="width:300px; text-align:center;">
+        <h2>Manager Login</h2>
+        <input type="text" id="u" placeholder="Admin" style="width:90%; margin-bottom:10px;"><br>
+        <input type="password" id="p" placeholder="Password" style="width:90%; margin-bottom:10px;"><br>
+        <button class="btn-trend" style="width:100%;" onclick="doLogin()">Sign In</button>
+        <p id="err" style="color:red;"></p>
+    </div>
+    <script>
+        async function doLogin() {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: document.getElementById('u').value, password: document.getElementById('p').value})
+            });
+            if(res.ok) window.location.href = '/dashboard';
+            else document.getElementById('err').innerText = "Wrong Login";
+        }
+    </script>
+</body>
+</html>
