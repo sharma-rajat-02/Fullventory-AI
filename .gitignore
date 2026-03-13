@@ -1,5 +1,4 @@
+inventory.db
 .env
 __pycache__/
-inventory.db
-report.pdf
-*.pyc
+*.pdf

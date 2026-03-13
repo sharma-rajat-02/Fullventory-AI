@@ -13,7 +13,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fpdf import FPDF
 
-load_dotenv()
+# --- DYNAMIC PATHING ---
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "rajat_startup_2026")
@@ -21,21 +23,10 @@ CORS(app)
 
 # --- CONFIG ---
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-RECEIVER_EMAIL = os.getenv("SENDER_EMAIL")
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
-# This automatically finds the folder where app.py is sitting
-# This tells Python to look in the folder where app.py itself is located
 
-# This finds the EXACT folder where app.py is sitting on Render
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Update your database and CSV paths to be ABSOLUTE
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'inventory.db')}"
-
-# Inside your run_ai_engine() function, use this:
-TRAIN_PATH = os.path.join(BASE_DIR, "train.csv")
-TEST_PATH = os.path.join(BASE_DIR, "test.csv")
-
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.joinpath('inventory.db').as_posix()}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -62,115 +53,144 @@ class OrderHistory(db.Model):
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    threshold_days = db.Column(db.Integer, default=10)
-    reorder_amount = db.Column(db.Integer, default=500)
+    threshold_days = db.Column(db.Integer)
+    reorder_amount = db.Column(db.Integer)
 
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username='admin').first():
         db.session.add(User(username='admin', password=generate_password_hash('admin123')))
-    if not Settings.query.first():
-        db.session.add(Settings(threshold_days=10, reorder_amount=500))
     db.session.commit()
 
-# --- AI ENGINE ---
-def run_ai_engine():
-    TRAIN_PATH = os.path.join(BASE_DIR, "train.csv")
-    print(f"AI ENGINE STARTING: Looking for {TRAIN_PATH}") # THIS WILL SHOW IN RENDER LOGS
-    
-    if not os.path.exists(TRAIN_PATH):
-        print("CRITICAL ERROR: train.csv not found at the path above!")
+# --- AI ENGINE (Optimized for Large Data) ---
+def run_ai_engine(threshold_val):
+    TRAIN_PATH = BASE_DIR / "train.csv"
+    TEST_PATH = BASE_DIR / "test.csv"
+    if not TRAIN_PATH.exists(): 
+        print("ERROR: train.csv missing.")
         return
-    # ... rest of your code ...
-    # Add 'nrows=10000' to stop the RAM from exploding
-    train_df = pd.read_csv(TRAIN_PATH, nrows=5000)
-    test_df = pd.read_csv(TEST_PATH, nrows=2000)
     
-    config = Settings.query.first()
-    threshold = config.threshold_days if config else 10
-    train_df, test_df = pd.read_csv(TRAIN_PATH), pd.read_csv(TEST_PATH)
-    def clean(df):
-        df.columns = df.columns.str.lower()
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df['day'], df['month'], df['year'] = df['date'].dt.day, df['date'].dt.month, df['date'].dt.year
-            df['dayofweek'] = df['date'].dt.dayofweek
-        return df
-    train_df, test_df = clean(train_df), clean(test_df)
-    features = ['store', 'item', 'day', 'month', 'year', 'dayofweek']
-    model = RandomForestRegressor(n_estimators=10, max_depth=5, random_state=42)
-    model.fit(train_df[features], train_df['sales'])
-    test_df['predicted_sales'] = model.predict(test_df[features])
-    summary = test_df.groupby(['store', 'item'])['predicted_sales'].mean().reset_index()
-    for _, row in summary.iterrows():
-        p = Product.query.filter_by(item_id=int(row['item']), store_id=int(row['store'])).first()
-        if not p: p = Product(item_id=int(row['item']), store_id=int(row['store']), current_stock=500)
-        p.last_forecast = row['predicted_sales']
-        runway = (p.current_stock or 500) / (row['predicted_sales'] or 0.1)
-        p.status = "CRITICAL" if runway <= threshold else "HEALTHY"
-        db.session.add(p)
-    db.session.commit()
+    try:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Loading full dataset... please wait.")
+        # Removed 'nrows' to train on the WHOLE file
+        train_df = pd.read_csv(TRAIN_PATH)
+        test_df = pd.read_csv(TEST_PATH)
+        
+        def clean(df):
+            df.columns = df.columns.str.lower()
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+                df['day'], df['month'], df['year'] = df['date'].dt.day, df['date'].dt.month, df['date'].dt.year
+                df['dayofweek'] = df['date'].dt.dayofweek
+            return df
 
-# --- ROUTES ---
+        train_df, test_df = clean(train_df), clean(test_df)
+        features = ['store', 'item', 'day', 'month', 'year', 'dayofweek']
+        
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Training RandomForest on full data...")
+        # n_jobs=-1 uses all CPU cores to handle the large dataset faster
+        model = RandomForestRegressor(n_estimators=10, max_depth=5, random_state=42, n_jobs=-1)
+        model.fit(train_df[features], train_df['sales'])
+        
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Predicting and updating health status...")
+        test_df['predicted_sales'] = model.predict(test_df[features])
+        summary = test_df.groupby(['store', 'item'])['predicted_sales'].mean().reset_index()
+        
+        for _, row in summary.iterrows():
+            sid, iid = int(row['store']), int(row['item'])
+            p = Product.query.filter_by(item_id=iid, store_id=sid).first()
+            if not p: 
+                p = Product(item_id=iid, store_id=sid, current_stock=500)
+            
+            p.last_forecast = float(row['predicted_sales'])
+            divisor = p.last_forecast if p.last_forecast > 0 else 0.001
+            runway = p.current_stock / divisor
+            
+            p.status = "CRITICAL" if runway <= threshold_val else "HEALTHY"
+            db.session.add(p)
+            
+        db.session.commit()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] AI Sync Complete!")
+    except Exception as e:
+        print(f"AI Sync Error: {e}")
+
+# --- API ROUTES ---
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
     if 'user_id' not in session: return jsonify({"status": "error"}), 401
     config = Settings.query.first()
+    if not config:
+        config = Settings(threshold_days=10, reorder_amount=500)
+        db.session.add(config)
+        db.session.commit()
+
     if request.method == 'POST':
         data = request.json
-        config.threshold_days = int(data.get('threshold_days', 10))
-        config.reorder_amount = int(data.get('reorder_amount', 500))
+        new_thresh = int(data.get('threshold_days'))
+        new_qty = int(data.get('reorder_amount'))
+        config.threshold_days = new_thresh
+        config.reorder_amount = new_qty
         db.session.commit()
-        run_ai_engine()
-        return jsonify({"status": "success", "message": "AI Synced!"})
+        run_ai_engine(new_thresh) 
+        return jsonify({"status": "success"})
     return jsonify({"status": "success", "threshold_days": config.threshold_days, "reorder_amount": config.reorder_amount})
+
+@app.route('/api/inventory')
+def get_inventory():
+    if 'user_id' not in session: return jsonify({"status": "error"}), 401
+    products = Product.query.all()
+    if not products: 
+        config = Settings.query.first()
+        run_ai_engine(config.threshold_days if config else 10)
+        products = Product.query.all()
+    
+    data = []
+    for p in products:
+        divisor = p.last_forecast if p.last_forecast and p.last_forecast > 0 else 0.001
+        data.append({
+            "store": p.store_id, 
+            "item": p.item_id, 
+            "days_left": round(p.current_stock / divisor, 1), 
+            "status": p.status
+        })
+    return jsonify({"status": "success", "data": data})
+
+@app.route('/api/trends/<int:sid>/<int:iid>')
+def get_trends(sid, iid):
+    df = pd.read_csv(BASE_DIR / "train.csv") # Reads full file for the chart
+    df.columns = df.columns.str.lower()
+    if 'date' in df.columns: df['date'] = pd.to_datetime(df['date'])
+    subset = df[(df['store'] == sid) & (df['item'] == iid)].sort_values('date').tail(30)
+    return jsonify({"status": "success", "labels": subset['date'].dt.strftime('%Y-%m-%d').tolist(), "values": subset['sales'].tolist()})
 
 @app.route('/api/report')
 def download_report():
     if 'user_id' not in session: return redirect(url_for('login_page'))
     sid = request.args.get('store')
-    if sid and sid != 'all':
-        products = Product.query.filter_by(store_id=int(sid)).all()
-        title = f"Inventory Report: Store {sid}"
-    else:
-        products = Product.query.all()
-        title = "Global Inventory Report (All Stores)"
-    
+    products = Product.query.filter_by(store_id=int(sid)).all() if sid and sid != 'all' else Product.query.all()
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, title, ln=True, align='C')
-    pdf.set_font("Arial", '', 10); pdf.cell(200, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
-    pdf.ln(10); pdf.set_font("Arial", 'B', 12)
-    pdf.cell(30, 10, "Store", 1); pdf.cell(40, 10, "Item ID", 1); pdf.cell(40, 10, "Runway (Days)", 1); pdf.cell(60, 10, "Health Status", 1); pdf.ln()
-    pdf.set_font("Arial", '', 11)
+    pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, "Fullventory AI Report", ln=True, align='C')
+    pdf.ln(10); pdf.set_font("Arial", 'B', 11)
+    pdf.cell(30, 10, "Store", 1); pdf.cell(40, 10, "Item ID", 1); pdf.cell(40, 10, "Runway", 1); pdf.cell(60, 10, "Status", 1); pdf.ln()
     for p in products:
-        runway = round((p.current_stock or 500) / (p.last_forecast or 0.1), 1)
+        divisor = p.last_forecast if p.last_forecast and p.last_forecast > 0 else 0.001
+        runway = round(p.current_stock / divisor, 1)
         pdf.cell(30, 10, str(p.store_id), 1); pdf.cell(40, 10, str(p.item_id), 1); pdf.cell(40, 10, str(runway), 1); pdf.cell(60, 10, p.status, 1); pdf.ln()
-    path = BASE_DIR / "report.pdf"; pdf.output(str(path))
+    path = BASE_DIR / "temp_report.pdf"
+    pdf.output(str(path))
     return send_file(str(path), as_attachment=True)
-
-@app.route('/api/trends/<int:sid>/<int:iid>')
-def get_trends(sid, iid):
-    df = pd.read_csv(BASE_DIR / "train.csv")
-    df.columns = df.columns.str.lower(); df['date'] = pd.to_datetime(df['date'])
-    subset = df[(df['store'] == sid) & (df['item'] == iid)].sort_values('date').tail(30)
-    return jsonify({"status": "success", "labels": subset['date'].dt.strftime('%Y-%m-%d').tolist(), "values": subset['sales'].tolist()})
-
-@app.route('/api/inventory', methods=['GET'])
-def get_inventory():
-    products = Product.query.all()
-    if not products: run_ai_engine(); products = Product.query.all()
-    return jsonify({"status": "success", "data": [{"store": p.store_id, "item": p.item_id, "days_left": round((p.current_stock or 500) / (p.last_forecast or 0.1), 1), "status": p.status} for p in products]})
 
 @app.route('/api/order', methods=['POST'])
 def place_order():
     data = request.json
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587); server.starttls()
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         server.login(SENDER_EMAIL, APP_PASSWORD)
         msg = MIMEMultipart()
-        msg['From'], msg['To'], msg['Subject'] = SENDER_EMAIL, RECEIVER_EMAIL, f"ORDER: Store {data['store_id']} | Item #{data['item_id']}"
-        msg.attach(MIMEText(f"AI Restock triggered for Store {data['store_id']}.", 'plain'))
+        msg['From'], msg['To'] = SENDER_EMAIL, RECEIVER_EMAIL
+        msg['Subject'] = f"RESTOCK ALERT: Store {data['store_id']}"
+        msg.attach(MIMEText(f"AI Alert: Item {data['item_id']} is below threshold at Store {data['store_id']}.", 'plain'))
         server.send_message(msg); server.quit()
         db.session.add(OrderHistory(item_id=data['item_id'], store_id=data['store_id'])); db.session.commit()
         return jsonify({"status": "success"})
@@ -178,18 +198,18 @@ def place_order():
 
 @app.route('/api/receive', methods=['POST'])
 def receive_order():
-    config = Settings.query.first()
     order = OrderHistory.query.get(request.json.get('order_id'))
-    product = Product.query.filter_by(item_id=order.item_id, store_id=order.store_id).first()
-    if product:
-        product.current_stock += (config.reorder_amount if config else 500)
-        runway = product.current_stock / (product.last_forecast or 0.1)
-        product.status = "HEALTHY" if runway > (config.threshold_days if config else 10) else "CRITICAL"
+    if order:
+        p = Product.query.filter_by(item_id=order.item_id, store_id=order.store_id).first()
+        if p: 
+            config = Settings.query.first()
+            p.current_stock += (config.reorder_amount if config else 500)
+            p.status = "HEALTHY"
         order.status = "RECEIVED"; db.session.commit()
         return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 400
 
-@app.route('/api/history', methods=['GET'])
+@app.route('/api/history')
 def get_history():
     history = OrderHistory.query.order_by(OrderHistory.order_date.desc()).limit(10).all()
     return jsonify({"status": "success", "data": [{"id": h.id, "item": h.item_id, "store": h.store_id, "date": h.order_date.strftime("%Y-%m-%d %H:%M"), "status": h.status} for h in history]})
@@ -209,4 +229,5 @@ def api_login():
 @app.route('/api/logout')
 def logout(): session.pop('user_id', None); return redirect(url_for('login_page'))
 
-if __name__ == '__main__': app.run(host='127.0.0.1', port=8080, debug=True)
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=8080, debug=True)
