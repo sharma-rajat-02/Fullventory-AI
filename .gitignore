@@ -2,3 +2,4 @@ inventory.db
 .env
 __pycache__/
 *.pdf
+temp_report.pdf
