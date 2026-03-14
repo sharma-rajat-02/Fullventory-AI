@@ -186,16 +186,25 @@ def download_report():
 def place_order():
     data = request.json
     try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        # Port 587 is generally more stable on cloud providers like Render
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls() # Secure the connection
         server.login(SENDER_EMAIL, APP_PASSWORD)
+        
         msg = MIMEMultipart()
         msg['From'], msg['To'] = SENDER_EMAIL, RECEIVER_EMAIL
-        msg['Subject'] = f"RESTOCK ALERT: Store {data['store_id']}"
-        msg.attach(MIMEText(f"AI Alert: Item {data['item_id']} is low.", 'plain'))
-        server.send_message(msg); server.quit()
-        db.session.add(OrderHistory(item_id=data['item_id'], store_id=data['store_id'])); db.session.commit()
+        msg['Subject'] = f"Restock Alert: Store {data['store_id']}"
+        msg.attach(MIMEText(f"Item {data['item_id']} needs restocking.", 'plain'))
+        
+        server.send_message(msg)
+        server.quit()
+        
+        db.session.add(OrderHistory(item_id=data['item_id'], store_id=data['store_id']))
+        db.session.commit()
         return jsonify({"status": "success"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
+    except Exception as e:
+        print(f"DEPLOYMENT MAIL ERROR: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/receive', methods=['POST'])
 def receive_order():
