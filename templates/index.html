@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Fullventory AI | Predictive Dashboard</title>
+    <title>Fullventory AI | Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -11,7 +11,7 @@
             <h1>📦 Fullventory AI</h1>
             <div style="display:flex; gap:12px; align-items:center;">
                 <input type="text" id="searchInput" placeholder="Search Item ID..." onkeyup="filterTable()">
-                <a href="/api/report?store=all" class="btn-global">🌍 Global Report</a>
+                <a href="/api/report?store=all" class="btn-global" style="text-decoration:none;">🌍 Global Report</a>
                 <a href="/api/report" id="reportLink" class="btn-trend" style="text-decoration:none;">📥 Store Report</a>
                 <a href="/api/logout" style="color:var(--danger); font-weight:700; text-decoration:none; margin-left:10px;">Logout</a>
             </div>
@@ -19,7 +19,7 @@
 
         <div class="settings-box">
             <div style="flex:1;">
-                <h4 style="margin:0 0 10px 0;">AI Inventory Strategy</h4>
+                <h4 style="margin:0 0 10px 0;">AI Control Panel</h4>
                 <div style="display:flex; gap:15px;">
                     <div><label>THRESHOLD (DAYS)</label><input type="number" id="threshIn"></div>
                     <div><label>REORDER QTY</label><input type="number" id="qtyIn"></div>
@@ -31,32 +31,17 @@
         <div id="store-tabs" class="tabs-container"></div>
 
         <div class="table-card">
-            <div class="table-header"><h3 id="table-title" style="margin:0;">Inventory Health Matrix</h3></div>
+            <div class="table-header"><h3 id="table-title">Inventory Health Matrix</h3></div>
             <table>
-                <thead>
-                    <tr>
-                        <th>Location</th>
-                        <th>Item ID</th>
-                        <th>Runway</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Store</th><th>Item ID</th><th>Runway</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="table-body"></tbody>
             </table>
         </div>
 
         <div class="table-card" style="margin-top: 30px;">
-            <div class="table-header"><h3 style="margin:0;">Fulfillment History</h3></div>
+            <div class="table-header"><h3>Fulfillment History</h3></div>
             <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Item</th>
-                        <th>Store</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Date</th><th>Item</th><th>Store</th><th>Status</th></tr></thead>
                 <tbody id="history-body"></tbody>
             </table>
         </div>
@@ -66,7 +51,7 @@
         <div class="modal-content">
             <span onclick="closeModal()" class="close-btn">&times;</span>
             <h3 id="modalTitle">Demand Analysis</h3>
-            <div style="position: relative; height:40vh; width:100%;">
+            <div style="position: relative; height:350px; width:100%;">
                 <canvas id="trendChart"></canvas>
             </div>
         </div>
@@ -84,10 +69,10 @@
         }
 
         async function loadSettings() {
-            const res = await fetch('/api/settings');
+            const res = await fetch('/api/settings'); 
             const data = await res.json();
-            document.getElementById('threshIn').value = (data.threshold_days !== undefined) ? data.threshold_days : "";
-            document.getElementById('qtyIn').value = (data.reorder_amount !== undefined) ? data.reorder_amount : "";
+            document.getElementById('threshIn').value = data.threshold_days || 10;
+            document.getElementById('qtyIn').value = data.reorder_amount || 500;
         }
 
         async function loadInventory() {
@@ -102,19 +87,19 @@
 
         function generateStoreTabs(stores) {
             document.getElementById('store-tabs').innerHTML = stores.map(s => `
-                <button id="tab-${s}" class="tab-btn ${currentStoreFilter == s ? 'active' : ''}" 
-                        onclick="filterByStore(${s})">Store ${s}</button>
+                <button id="tab-${s}" class="tab-btn ${currentStoreFilter == s ? 'active' : ''}" onclick="filterByStore(${s})">Store ${s}</button>
             `).join('');
         }
 
         function filterByStore(sid) {
             currentStoreFilter = sid;
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            const activeBtn = document.getElementById(`tab-${sid}`);
-            if (activeBtn) activeBtn.classList.add('active');
-
-            document.getElementById('reportLink').href = `/api/report?store=${sid}`;
-            document.getElementById('reportLink').innerText = `📥 Store ${sid} Report`;
+            if(document.getElementById(`tab-${sid}`)) document.getElementById(`tab-${sid}`).classList.add('active');
+            
+            const reportBtn = document.getElementById('reportLink');
+            reportBtn.href = `/api/report?store=${sid}`;
+            reportBtn.innerText = `📥 Store ${sid} Report`;
+            
             document.getElementById('table-title').innerText = `Inventory Status: Store ${sid}`;
             filterTable();
         }
@@ -122,7 +107,6 @@
         function filterTable() {
             const q = document.getElementById('searchInput').value.toLowerCase();
             const filtered = inventoryData.filter(i => i.item.toString().includes(q) && i.store == currentStoreFilter);
-
             document.getElementById('table-body').innerHTML = filtered.map(item => `
                 <tr>
                     <td>Store ${item.store}</td>
@@ -138,18 +122,16 @@
 
         async function saveSettings() {
             const btn = document.getElementById('syncBtn');
-            const t = document.getElementById('threshIn').value;
-            const q = document.getElementById('qtyIn').value;
-            if(!t || !q) { alert("Please enter both Threshold and Quantity."); return; }
-            btn.innerText = "Syncing AI..."; btn.disabled = true;
-            try {
-                const response = await fetch('/api/settings', { 
-                    method:'POST', 
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({threshold_days: t, reorder_amount: q})
-                });
-                if(response.ok) { await loadInventory(); alert("AI Sync Complete!"); }
-            } finally { btn.innerText = "Apply & Sync AI"; btn.disabled = false; }
+            btn.innerText = "Processing AI..."; btn.disabled = true;
+            await fetch('/api/settings', { 
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    threshold_days: document.getElementById('threshIn').value, 
+                    reorder_amount: document.getElementById('qtyIn').value
+                })
+            });
+            await loadInventory(); 
+            btn.innerText = "Apply & Sync AI"; btn.disabled = false;
         }
 
         async function loadHistory() {
@@ -157,41 +139,55 @@
             const result = await res.json();
             document.getElementById('history-body').innerHTML = result.data.map(h => `
                 <tr>
-                    <td>${h.date}</td><td>#${h.item}</td><td>Store ${h.store}</td>
-                    <td>${h.status === 'PENDING' ? `<button class="btn-primary" onclick="receiveItem(${h.id})">Receive</button>` : '<span style="color:var(--success); font-weight:700;">Completed</span>'}</td>
+                    <td>${h.date}</td>
+                    <td>#${h.item}</td>
+                    <td>Store ${h.store}</td>
+                    <td>
+                        ${h.status === 'PENDING' ? 
+                            `<button class="btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="receiveItem(${h.id})">Receive Order</button>` : 
+                            '<span style="color: #10b981; font-weight: bold;">✅ Received</span>'
+                        }
+                    </td>
                 </tr>`).join('');
         }
 
+        // --- GRAPH ANALYSIS LOGIC ---
         async function showTrends(sid, iid) {
+            // 1. Show the modal
             document.getElementById('chartModal').classList.add('active');
             
-            // Wait for modal animation to finish before drawing
+            // 2. Wait for modal animation (250ms) so canvas isn't 0px
             setTimeout(async () => {
                 const res = await fetch(`/api/trends/${sid}/${iid}`); 
                 const result = await res.json();
                 const ctx = document.getElementById('trendChart').getContext('2d');
+                
                 if(myChart) myChart.destroy();
                 
                 myChart = new Chart(ctx, { 
                     type: 'line', 
                     data: { 
                         labels: result.labels, 
-                        datasets: [{
-                            label: 'Daily Sales', 
+                        datasets: [{ 
+                            label: 'Sales Demand', 
                             data: result.values, 
                             borderColor: '#4f46e5', 
-                            fill: true, 
                             backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                            tension: 0.4
+                            tension: 0.3, 
+                            fill: true 
                         }] 
-                    }, 
-                    options: { responsive: true, maintainAspectRatio: false }
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        animation: { duration: 500 } 
+                    }
                 });
-            }, 300);
+            }, 250);
         }
 
         async function orderItem(iid, sid) { 
-            if(confirm('Place restock order?')) { 
+            if(confirm('Send Restock Alert?')) { 
                 await fetch('/api/order', {
                     method:'POST', 
                     headers:{'Content-Type':'application/json'}, 
@@ -202,11 +198,18 @@
         }
 
         async function receiveItem(oid) { 
-            await fetch('/api/receive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({order_id:oid})}); 
+            await fetch('/api/receive', {
+                method:'POST', 
+                headers:{'Content-Type':'application/json'}, 
+                body:JSON.stringify({order_id:oid})
+            }); 
             init(); 
         }
 
-        function closeModal() { document.getElementById('chartModal').classList.remove('active'); }
+        function closeModal() { 
+            document.getElementById('chartModal').classList.remove('active'); 
+        }
+
         init();
     </script>
 </body>
