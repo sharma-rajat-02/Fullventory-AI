@@ -12,29 +12,44 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from sklearn.ensemble import RandomForestRegressor
 from fpdf import FPDF
+from sqlalchemy import create_engine
 
-# --- SETUP ---
+# --- INITIALIZE ENVIRONMENT ---
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
+# --- APP SETUP ---
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "rajat_startup_2026")
 CORS(app)
 
-# --- DATABASE CONFIG (Supabase Transaction Pooler) ---
-# Replace [YOUR-PASSWORD] in your .env file with your actual Supabase password
-SUPABASE_URL = "postgresql://postgres.juotdcttdlxyaogvqloy:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL", SUPABASE_URL)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# --- DATABASE CONFIGURATION ---
+# 1. Prioritize Render/Environment Variable
+db_url = os.getenv("DATABASE_URL")
 
-# Optimized for Transaction Pooling
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_pre_ping": True,
-    "pool_recycle": 300,
-}
+# 2. Fallback to Supabase Pooler String for Local Development
+if not db_url:
+    # IMPORTANT: Replace [YOUR-PASSWORD] with your actual or encoded password
+    db_url = "postgresql://postgres.juotdcttdlxyaogvqloy:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
 
+# 3. FIX: Convert legacy 'postgres://' (Render) to 'postgresql://' (SQLAlchemy)
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# 4. Apply Configuration
+app.config.update(
+    SQLALCHEMY_DATABASE_URI=db_url,
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_ENGINE_OPTIONS={
+        "pool_pre_ping": True,    # Checks connection health before every query
+        "pool_recycle": 300,      # Prevents "Idle Timeout" from Supabase Pooler
+        "pool_size": 10,          # Standard startup capacity
+        "max_overflow": 20        # Allows for traffic spikes during your demo
+    }
+)
+
+# 5. Initialize Database Object
 db = SQLAlchemy(app)
-
 # --- MODELS ---
 class User(db.Model):
     __tablename__ = 'users'
