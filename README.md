@@ -1,66 +1,18 @@
-🚀 Fullventory AI
-Strategic Inventory Intelligence & Autonomous Supply Chain Engine
-Fullventory AI is a cloud-native, machine-learning-driven inventory management system designed for 2026 enterprise standards. It moves beyond passive tracking by using predictive analytics to forecast stockouts and automate the fulfillment cycle.
+# 🚀 Fullventory AI 
+### *Strategic Inventory Intelligence & Autonomous Supply Chain Engine*
 
-💎 Core Value Proposition
-In modern retail, a "Stockout" is a lost revenue event. Fullventory AI bridges the gap between data and action:
+[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Framework-Flask-lightgrey.svg)](https://flask.palletsprojects.com/)
+[![Supabase](https://img.shields.io/badge/Database-Supabase-green.svg)](https://supabase.com/)
+[![AI-ML](https://img.shields.io/badge/AI--ML-Scikit--Learn-orange.svg)](https://scikit-learn.org/)
 
-Predictive Velocity: Uses Random Forest Regression to analyze historical sales patterns and predict future demand.
+**Fullventory AI** is a cloud-native, machine-learning-driven inventory management system designed for 2026 enterprise standards. It moves beyond passive tracking by using predictive analytics to forecast stockouts and automate the fulfillment cycle.
 
-Autonomous Fulfillment: Triggers automated supplier communication via the Resend API when stock hits critical thresholds.
+---
 
-Cloud Infrastructure: Leverages Supabase (PostgreSQL) with Transaction Pooling for real-time data consistency across multiple locations.
+## ⚙️ Quick Start (Installation)
 
-🛠️ Tech Stack & Architecture
-Intelligence Layer
-Scikit-Learn: Random Forest Regressor for sales forecasting and demand planning.
-
-Pandas & NumPy: High-performance processing of 100,000+ training records from Big Data sources.
-
-Backend & Cloud
-Flask (Python): RESTful API architecture.
-
-Supabase (PostgreSQL): Production-grade cloud database with Transaction Pooling (PgBouncer).
-
-SQLAlchemy: Optimized connection pooling (pool_pre_ping) for resilient cloud-to-local communication.
-
-Communication & Reporting
-Resend API: Enterprise-grade automated email delivery for Purchase Orders.
-
-FPDF: Dynamic PDF generation for Inventory Health and Fulfillment audit logs.
-
-🚀 Key Features
-🏥 Dynamic Health Matrix
-A real-time dashboard that categorizes items by "Days Left" rather than just raw quantity. Color-coded status alerts (Critical vs. Healthy) allow warehouse managers to prioritize high-velocity items.
-
-🧠 AI Sync Engine
-A specialized batch-processing engine that trains locally on extensive CSV datasets and pushes optimized forecasts to the Supabase cloud in unified transactions, reducing network latency by 80%.
-
-📦 Smart Fulfillment History
-A comprehensive audit trail tracking Store IDs, Item IDs, and Unit counts. The system allows for manual stock reconciliation via "Mark Received" actions that sync instantly with cloud inventory.
-
-⚙️ Installation & Setup
-Clone the Repository
-
-Bash
-git clone https://github.com/rajatsharma/fullventory-ai.git
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/rajatsharma/fullventory-ai.git](https://github.com/rajatsharma/fullventory-ai.git)
 cd fullventory-ai
-Install Dependencies
-
-Bash
-pip install -r requirements.txt
-Configure Environment Variables
-Create a .env file in the root directory:
-
-Code snippet
-DATABASE_URL=postgresql://postgres.[REF]:[PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
-SECRET_KEY=rajat_startup_2026
-RESEND_API_KEY=re_xxxxxxxx
-MY_DOMAIN=fullventoryai.me
-RECEIVER_EMAIL=admin@example.com
-Run the Application
-
-Bash
-python app.py
-👨‍💻 Author
-Rajat Sharma B.Tech in Computer Science (AI & ML), VIT Bhopal University Specializing in Predictive Analytics and Scalable Cloud Architectures.
