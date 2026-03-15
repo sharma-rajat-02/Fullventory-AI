@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Fullventory AI | Dashboard</title>
+    <title>Fullventory AI | Founder Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -11,162 +11,128 @@
             <h1>📦 Fullventory AI</h1>
             <div style="display:flex; gap:12px; align-items:center;">
                 <input type="text" id="searchInput" placeholder="Search Item ID..." onkeyup="filterTable()">
-                <a href="/api/report?store=all" class="btn-global" style="text-decoration:none;">🌍 Global Report</a>
-                <a href="/api/report" id="reportLink" class="btn-trend" style="text-decoration:none;">📥 Store Report</a>
-                <a href="/api/logout" style="color:var(--danger); font-weight:700; text-decoration:none;">Logout</a>
+                <a href="/api/report?store=all" class="btn-global" style="text-decoration:none; background:#059669; color:white; padding:8px 14px; border-radius:6px; font-weight:600;">🌍 Inventory Report</a>
+                <a href="/api/report" id="reportLink" class="btn-trend" style="text-decoration:none; background:#2563eb; color:white; padding:8px 14px; border-radius:6px; font-weight:600;">📥 Store Report</a>
+                <a href="/api/logout" style="color:#ef4444; font-weight:700; text-decoration:none;">Logout</a>
             </div>
         </header>
 
         <div class="settings-box">
-            <h4 style="margin:0 0 10px 0;">AI Control Panel</h4>
+            <h4 style="margin:0 0 10px 0;">Strategic Control</h4>
             <div style="display:flex; gap:15px; align-items:flex-end;">
                 <div><label>THRESHOLD (DAYS)</label><input type="number" id="threshIn"></div>
-                <div><label>REORDER QTY (BASE)</label><input type="number" id="qtyIn"></div>
-                <button class="btn-primary" id="syncBtn" onclick="saveSettings()">Apply & Sync AI</button>
+                <div><label>BASE REORDER QTY</label><input type="number" id="qtyIn"></div>
+                <button class="btn-primary" id="syncBtn" onclick="saveSettings()">Sync AI Engine</button>
             </div>
         </div>
 
         <div id="store-tabs" class="tabs-container"></div>
 
         <div class="table-card">
-            <div class="table-header"><h3>Inventory Health Matrix</h3></div>
+            <div class="table-header"><h3>Health Matrix</h3></div>
             <table>
-                <thead><tr><th>Store</th><th>Item ID</th><th>Runway</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Store</th><th>Item</th><th>Stock</th><th>Runway</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="table-body"></tbody>
             </table>
         </div>
 
-        <div class="table-card" style="margin-top: 30px;">
-            <div class="table-header"><h3>Store Suppliers</h3></div>
-            <table>
-                <thead><tr><th>Store ID</th><th>Supplier Email</th><th>Action</th></tr></thead>
-                <tbody id="supplier-body"></tbody>
-            </table>
-            <div style="padding:15px; border-top:1px solid #eee;">
-                <button class="btn-trend" onclick="editSupplier()">+ Add / Update Supplier</button>
-            </div>
+        <div class="table-card" style="margin-top:25px;">
+            <div class="table-header"><h3>Suppliers</h3></div>
+            <table><thead><tr><th>Store</th><th>Email</th><th>Action</th></tr></thead><tbody id="supplier-body"></tbody></table>
+            <button class="btn-trend" style="margin:15px;" onclick="editSupplier()">+ Add Supplier</button>
         </div>
 
-        <div class="table-card" style="margin-top: 30px;">
+        <div class="table-card" style="margin-top:25px;">
             <div class="table-header"><h3>Fulfillment History</h3></div>
-            <table>
-                <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Status</th></tr></thead>
-                <tbody id="history-body"></tbody>
-            </table>
+            <table><thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Status</th></tr></thead><tbody id="history-body"></tbody></table>
         </div>
     </div>
 
-    <div id="chartModal"><div class="modal-content"><span onclick="closeModal()" class="close-btn">&times;</span><h3 id="modalTitle">Demand Analysis</h3><div style="position: relative; height:350px;"><canvas id="trendChart"></canvas></div></div></div>
+    <div id="chartModal">
+        <div class="modal-content">
+            <span onclick="closeModal()" class="close-btn">&times;</span>
+            <h3 id="modalTitle">Demand Trends</h3>
+            <div style="position: relative; height:350px;"><canvas id="trendChart"></canvas></div>
+        </div>
+    </div>
 
     <script>
         let inventoryData = []; let currentStoreFilter = null; let myChart = null;
 
-        async function init() { 
-            await loadSettings(); 
-            await loadInventory(); 
-            await loadHistory(); 
-            await loadSuppliers(); 
-        }
-
-        async function loadSettings() {
-            const res = await fetch('/api/settings'); const data = await res.json();
-            document.getElementById('threshIn').value = data.threshold_days || 10;
-            document.getElementById('qtyIn').value = data.reorder_amount || 500;
-        }
+        async function init() { await loadSettings(); await loadInventory(); await loadHistory(); await loadSuppliers(); }
 
         async function loadInventory() {
             const res = await fetch('/api/inventory'); const result = await res.json();
             inventoryData = result.data;
             const stores = [...new Set(inventoryData.map(i => i.store))].sort((a,b)=>a-b);
-            generateStoreTabs(stores); 
-            if (stores.length > 0 && currentStoreFilter === null) filterByStore(stores[0]);
-            else if (currentStoreFilter !== null) filterByStore(currentStoreFilter);
-        }
-
-        function generateStoreTabs(stores) {
-            document.getElementById('store-tabs').innerHTML = stores.map(s => 
-                `<button class="tab-btn ${currentStoreFilter == s ? 'active' : ''}" id="tab-${s}" onclick="filterByStore(${s})">Store ${s}</button>`
-            ).join('');
+            document.getElementById('store-tabs').innerHTML = stores.map(s => `<button class="tab-btn ${currentStoreFilter == s ? 'active' : ''}" id="tab-${s}" onclick="filterByStore(${s})">Store ${s}</button>`).join('');
+            if (stores.length > 0 && currentStoreFilter === null) filterByStore(stores[0]); else filterTable();
         }
 
         function filterByStore(sid) {
             currentStoreFilter = sid;
             document.getElementById('reportLink').href = `/api/report?store=${sid}`;
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            const activeTab = document.getElementById(`tab-${sid}`);
-            if(activeTab) activeTab.classList.add('active');
+            if(document.getElementById(`tab-${sid}`)) document.getElementById(`tab-${sid}`).classList.add('active');
             filterTable();
         }
 
         function filterTable() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            const baseQty = document.getElementById('qtyIn').value || 500;
+            const baseQty = document.getElementById('qtyIn').value || 500; // This is your Manual/Base Qty
             const filtered = inventoryData.filter(i => i.item.toString().includes(q) && i.store == currentStoreFilter);
+            
             document.getElementById('table-body').innerHTML = filtered.map(item => `
                 <tr>
                     <td>Store ${item.store}</td>
                     <td><code>#${item.item}</code></td>
-                    <td><strong>${item.days_left} Days</strong></td>
+                    <td>
+                        <b>${item.units_left}</b> Units
+                        <button onclick="manualAdj(${item.store}, ${item.item}, ${item.units_left})" style="border:none; background:none; cursor:pointer;">✏️</button>
+                    </td>
+                    <td>
+                        <div style="font-weight:bold; color:${item.days_left < 5 ? '#ef4444' : '#111827'}">${item.days_left} Days</div>
+                        <div style="font-size:11px; color:#6b7280;">Out: ${item.out_date}</div>
+                    </td>
                     <td><span class="status ${item.status.toLowerCase()}">${item.status}</span></td>
                     <td>
                         <div style="display:flex; gap:8px;">
                             <button class="btn-trend" onclick="showTrends(${item.store}, ${item.item})">Analyze</button>
+                            
                             ${item.status === 'CRITICAL' ? `
-                                <button class="btn-order" style="background:#4f46e5; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="orderItem(${item.item}, ${item.store}, ${item.suggested_reorder}, 'AI')">AI (${item.suggested_reorder})</button>
-                                <button class="btn-order" style="background:#6b7280; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="orderItem(${item.item}, ${item.store}, ${baseQty}, 'Base')">Base (${baseQty})</button>
-                            ` : ''}
+                                <button class="btn-primary" style="background:#4f46e5;" onclick="orderItem(${item.item}, ${item.store}, ${item.suggested_reorder})">
+                                    AI (${item.suggested_reorder})
+                                </button>
+                                <button class="btn-primary" style="background:#6b7280;" onclick="orderItem(${item.item}, ${item.store}, ${baseQty})">
+                                    Base (${baseQty})
+                                </button>
+                            ` : '—'}
                         </div>
                     </td>
                 </tr>`).join('');
         }
 
+        async function orderItem(iid, sid, qty) {
+            if(confirm(`Send AI-optimized PO for ${qty} units?`)) {
+                await fetch('/api/order', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({item_id:iid, store_id:sid, quantity:qty})});
+                init();
+            }
+        }
+        
+        async function manualAdj(sid, iid, old) {
+            const val = prompt(`Audit Item #${iid}:`, old);
+            if(val) {
+                await fetch('/api/inventory/adjust', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({store:sid, item:iid, new_qty:val})});
+                loadInventory();
+            }
+        }
+
         async function saveSettings() {
-            const btn = document.getElementById('syncBtn');
-            btn.innerText = "Syncing..."; btn.disabled = true;
-            await fetch('/api/settings', { 
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ threshold_days: document.getElementById('threshIn').value, reorder_amount: document.getElementById('qtyIn').value })
-            });
-            alert("Sync Complete!"); btn.innerText = "Apply & Sync AI"; btn.disabled = false;
-            await loadInventory();
+            const btn = document.getElementById('syncBtn'); btn.innerText = "Syncing...";
+            await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({threshold_days: document.getElementById('threshIn').value, reorder_amount: document.getElementById('qtyIn').value})});
+            btn.innerText = "Sync AI Engine"; loadInventory();
         }
 
-        async function loadSuppliers() {
-            const res = await fetch('/api/suppliers');
-            const result = await res.json();
-            document.getElementById('supplier-body').innerHTML = result.data.map(s => `
-                <tr><td>Store ${s.store_id}</td><td>${s.email}</td><td><button class="btn-trend" onclick="editSupplier(${s.store_id}, '${s.email}')">Edit</button></td></tr>
-            `).join('');
-        }
-
-        async function editSupplier(sid = '', email = '') {
-            const newSid = prompt("Enter Store ID:", sid);
-            const newEmail = prompt("Enter Supplier Email:", email);
-            if(newSid && newEmail) {
-                await fetch('/api/suppliers', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ store_id: newSid, email: newEmail })
-                });
-                loadSuppliers();
-            }
-        }
-
-        async function orderItem(iid, sid, qty, src) {
-            if(confirm(`Place ${src} order for ${qty} units?`)) {
-                const res = await fetch('/api/order', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({item_id:iid, store_id:sid, quantity:qty})});
-                if(res.ok) { alert("Order Processed!"); init(); } else { alert("Error. Check Terminal."); }
-            }
-        }
-
-        async function loadHistory() {
-            const res = await fetch('/api/history'); const result = await res.json();
-            document.getElementById('history-body').innerHTML = result.data.map(h => `
-                <tr><td>${h.date}</td><td>#${h.item}</td><td>${h.qty}</td><td>${h.status === 'PENDING' ? `<button class="btn-primary" onclick="receiveItem(${h.id})">Receive</button>` : '✅'}</td></tr>
-            `).join('');
-        }
-
-        async function receiveItem(oid) { await fetch('/api/receive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({order_id:oid})}); init(); }
-        function closeModal() { document.getElementById('chartModal').classList.remove('active'); }
         async function showTrends(sid, iid) {
             document.getElementById('chartModal').classList.add('active');
             const res = await fetch(`/api/trends/${sid}/${iid}`); const result = await res.json();
@@ -174,6 +140,31 @@
             if(myChart) myChart.destroy();
             myChart = new Chart(ctx, { type:'line', data:{ labels:result.labels, datasets:[{label:'Sales', data:result.values, borderColor:'#4f46e5', fill:true, backgroundColor:'rgba(79,70,229,0.1)'}] }, options:{responsive:true, maintainAspectRatio:false} });
         }
+
+        async function loadSettings() {
+            const res = await fetch('/api/settings'); const data = await res.json();
+            document.getElementById('threshIn').value = data.threshold_days;
+            document.getElementById('qtyIn').value = data.reorder_amount;
+        }
+
+        async function loadSuppliers() {
+            const res = await fetch('/api/suppliers'); const result = await res.json();
+            document.getElementById('supplier-body').innerHTML = result.data.map(s => `<tr><td>Store ${s.store_id}</td><td>${s.email}</td><td><button class="btn-trend" onclick="editSupplier(${s.store_id}, '${s.email}')">Edit</button></td></tr>`).join('');
+        }
+
+        async function editSupplier(sid='', email='') {
+            const nsid = prompt("Store ID:", sid); const nml = prompt("Email:", email);
+            if(nsid && nml) { await fetch('/api/suppliers', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({store_id:nsid, email:nml})}); loadSuppliers(); }
+        }
+
+        async function loadHistory() {
+            const res = await fetch('/api/history'); const result = await res.json();
+            document.getElementById('history-body').innerHTML = result.data.map(h => `<tr><td>${h.date}</td><td>#${h.item}</td><td>${h.qty}</td><td>${h.status === 'PENDING' ? `<button class="btn-primary" onclick="receiveItem(${h.id})">Receive</button>` : '✅'}</td></tr>`).join('');
+        }
+
+        async function receiveItem(oid) { await fetch('/api/receive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({order_id:oid})}); init(); }
+        function closeModal() { document.getElementById('chartModal').classList.remove('active'); }
+
         init();
     </script>
 </body>
