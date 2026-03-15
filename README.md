@@ -39,41 +39,33 @@ python app.py
 ```
 
 ### 💎 Core Value Proposition
-### 🛠️ Key Features
-* **Feature One:** Description here.
-* **Feature Two:** Description here.
-* **Feature Three:** Description here.
 
-### 📦 Tech Stack
-- **Backend:** Flask
-- **Database:** Supabase
-- **AI:** Scikit-Learn
-Predictive Velocity: Uses Random Forest Regression to analyze historical sales patterns and predict future demand.
+- **Predictive Velocity:** Uses Random Forest Regression to analyze historical sales patterns and predict future demand.
 
-Autonomous Fulfillment: Triggers automated supplier communication via the Resend API when stock hits critical thresholds.
+- **Autonomous Fulfillment:** Triggers automated supplier communication via the Resend API when stock hits critical thresholds.
 
-Cloud Infrastructure: Leverages Supabase (PostgreSQL) with Transaction Pooling for real-time data consistency.
+- **Cloud Infrastructure:** Leverages Supabase (PostgreSQL) with Transaction Pooling for real-time data consistency.
 
-🚀 Key Features
-🏥 Dynamic Health Matrix
-A real-time dashboard that categorizes items by "Days Left" rather than just raw quantity. Color-coded status alerts (Critical vs. Healthy) allow warehouse managers to prioritize high-velocity items.
+### 🚀 Key Features
+* **🏥 Dynamic Health Matrix**
+  A real-time dashboard that categorizes items by "Days Left" rather than just raw quantity. Color-coded status alerts (Critical vs. Healthy) allow warehouse managers to prioritize high-velocity items.
 
-🧠 AI Sync Engine
+* **🧠 AI Sync Engine**
 A specialized batch-processing engine that trains locally on extensive CSV datasets and pushes optimized forecasts to the Supabase cloud in unified transactions.
 
-📦 Smart Fulfillment History
+* **📦 Smart Fulfillment History**
 A comprehensive audit trail tracking Store IDs, Item IDs, and Unit counts. The system allows for manual stock reconciliation via "Mark Received" actions that sync instantly with cloud inventory.
 
-🛠️ Tech Stack
-Intelligence: Scikit-Learn (Random Forest), Pandas, NumPy.
+### 🛠️ Tech Stack
+* **Intelligence:** Scikit-Learn (Random Forest), Pandas, NumPy.
 
-Backend: Flask (Python 3.13), SQLAlchemy (ORM).
+* **Backend:** Flask (Python 3.13), SQLAlchemy (ORM).
 
-Database: Supabase (PostgreSQL) with PgBouncer Pooling.
+* **Database:** Supabase (PostgreSQL) with PgBouncer Pooling.
 
-Email: Resend API.
+* **Email:** Resend API.
 
-Reports: FPDF.
+* **Reports:** FPDF.
 
-👨‍💻 Author
-Rajat Sharma B.Tech in Computer Science (AI & ML), VIT Bhopal University Specializing in Predictive Analytics and Scalable Cloud Architectures.
+### 👨‍💻 Author
+**Rajat Sharma** B.Tech in Computer Science (AI & ML), VIT Bhopal University Specializing in Predictive Analytics and Scalable Cloud Architectures.
