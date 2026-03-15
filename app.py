@@ -21,37 +21,45 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "rajat_startup_2026")
 CORS(app)
 
-# --- CONFIG ---
-resend.api_key = os.getenv("RESEND_API_KEY")
-ADMIN_EMAIL = os.getenv("RECEIVER_EMAIL")
-MY_DOMAIN = "fullventoryai.me" 
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR.joinpath('inventory.db').as_posix()}"
+# --- DATABASE CONFIG (Supabase Transaction Pooler) ---
+# Replace [YOUR-PASSWORD] in your .env file with your actual Supabase password
+SUPABASE_URL = "postgresql://postgres.juotdcttdlxyaogvqloy:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL", SUPABASE_URL)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Optimized for Transaction Pooling
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
+
 db = SQLAlchemy(app)
 
 # --- MODELS ---
 class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
 
 class Product(db.Model):
+    __tablename__ = 'products'
     id = db.Column(db.Integer, primary_key=True)
     item_id = db.Column(db.Integer, nullable=False)
     store_id = db.Column(db.Integer, nullable=False)
     current_stock = db.Column(db.Integer, default=500)
     last_forecast = db.Column(db.Float)
     status = db.Column(db.String(20), default="HEALTHY")
-    # ANCHOR: The date the current stock level was established
-    base_stock_date = db.Column(db.DateTime, default=datetime(2026, 3, 15)) 
+    base_stock_date = db.Column(db.DateTime, default=datetime(2026, 3, 15))
 
 class StoreSupplier(db.Model):
+    __tablename__ = 'suppliers'
     id = db.Column(db.Integer, primary_key=True)
     store_id = db.Column(db.Integer, unique=True, nullable=False)
     email = db.Column(db.String(120), nullable=False)
 
 class OrderHistory(db.Model):
+    __tablename__ = 'orders'
     id = db.Column(db.Integer, primary_key=True)
     item_id = db.Column(db.Integer, nullable=False)
     store_id = db.Column(db.Integer, nullable=False)
@@ -60,41 +68,38 @@ class OrderHistory(db.Model):
     status = db.Column(db.String(20), default="PENDING")
 
 class Settings(db.Model):
+    __tablename__ = 'settings'
     id = db.Column(db.Integer, primary_key=True)
     threshold_days = db.Column(db.Integer, default=10)
     reorder_amount = db.Column(db.Integer, default=500)
 
+# Initialize Supabase Tables
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username='admin').first():
-        db.session.add(User(username='admin', password=generate_password_hash('#A4apple')))
+        db.session.add(User(username='admin', password=generate_password_hash('admin123')))
     db.session.commit()
 
 # --- API ROUTES ---
+
 @app.route('/api/inventory')
 def get_inventory():
     if 'user_id' not in session: return jsonify({"status": "error"}), 401
-    products = Product.query.all()
+    
+    # ADDED: .order_by(Product.item_id.asc())
+    products = Product.query.order_by(Product.item_id.asc()).all()
+    
     config = Settings.query.first()
     thresh = config.threshold_days if config else 10
-    
-    # FIXED SYSTEM CLOCK FOR CALCULATION
     current_time = datetime(2026, 3, 15) 
     data = []
     
     for p in products:
         forecast = p.last_forecast or 1.0
-        
-        # Calculate real elapsed time since stock was set
         days_passed = (current_time - p.base_stock_date).days
-        
-        # DEPLETION CALCULATION
         actual_units = max(0, p.current_stock - math.floor(forecast * days_passed))
         days_left = math.floor(actual_units / forecast)
-        
-        # ANCHORED OUT DATE
         out_date = (current_time + timedelta(days=days_left)).strftime("%b %d, %Y")
-        
         target_inv = (forecast * thresh * 2) * 1.2
         suggested = math.ceil(max(0, target_inv - actual_units))
         
@@ -112,10 +117,25 @@ def adjust_stock():
     p = Product.query.filter_by(store_id=data['store'], item_id=data['item']).first()
     if p:
         p.current_stock = int(data['new_qty'])
-        p.base_stock_date = datetime(2026, 3, 15) # Reset anchor to "today"
+        p.base_stock_date = datetime(2026, 3, 15)
         db.session.commit()
         return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 404
+
+@app.route('/api/trends/<int:sid>/<int:iid>')
+def get_trends(sid, iid):
+    # Search BigData efficiently
+    try:
+        df = pd.read_csv(BASE_DIR / "train.csv", nrows=200000, usecols=['date', 'store', 'item', 'sales'])
+        df.columns = df.columns.str.lower()
+        subset = df[(df['store'] == sid) & (df['item'] == iid)].tail(15)
+        if subset.empty: return jsonify({"status": "error", "message": "No history found"})
+        return jsonify({
+            "status": "success", 
+            "labels": pd.to_datetime(subset['date']).dt.strftime('%m/%d').tolist(), 
+            "values": subset['sales'].tolist()
+        })
+    except Exception as e: return jsonify({"status": "error", "message": str(e)})
 
 @app.route('/api/report')
 def download_report():
@@ -129,60 +149,6 @@ def download_report():
     path = BASE_DIR / "report.pdf"; pdf.output(str(path))
     return send_file(str(path), as_attachment=True)
 
-@app.route('/api/trends/<int:sid>/<int:iid>')
-def get_trends(sid, iid):
-    try:
-        # STRATEGY: We scan up to 500k rows now. 
-        # To keep it fast, we only keep the columns we need.
-        df = pd.read_csv(
-            BASE_DIR / "train.csv", 
-            nrows=500000, 
-            usecols=['date', 'store', 'item', 'sales']
-        )
-        df.columns = df.columns.str.lower()
-        
-        # Filter for the specific item the user clicked
-        subset = df[(df['store'] == sid) & (df['item'] == iid)]
-        
-        if subset.empty:
-            # If still empty, the item might be even deeper in the big data
-            return jsonify({"status": "error", "message": "History not found in sample range"})
-
-        # Grab the most recent 15 records for the line chart
-        recent = subset.tail(15)
-        
-        return jsonify({
-            "status": "success", 
-            "labels": pd.to_datetime(recent['date']).dt.strftime('%m/%d').tolist(), 
-            "values": recent['sales'].tolist()
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-@app.route('/api/order', methods=['POST'])
-def place_order():
-    data = request.json
-    s = StoreSupplier.query.filter_by(store_id=data['store_id']).first()
-    target = s.email if s else ADMIN_EMAIL
-    qty = data.get('quantity')
-    try:
-        resend.Emails.send({"from": f"Fullventory AI <orders@{MY_DOMAIN}>", "to": [target], "subject": f"📦 Order: Store {data['store_id']}", "html": f"<h3>Restock Needed</h3><p>Store: {data['store_id']}</p><p>Item: {data['item_id']}</p><p>Qty: {qty} units</p>"})
-    except: pass
-    db.session.add(OrderHistory(item_id=data['item_id'], store_id=data['store_id'], quantity=qty, status='PENDING'))
-    db.session.commit()
-    return jsonify({"status": "success"})
-
-@app.route('/api/receive', methods=['POST'])
-def receive_order():
-    order = OrderHistory.query.get(request.json.get('order_id'))
-    if order:
-        p = Product.query.filter_by(item_id=order.item_id, store_id=order.store_id).first()
-        if p: 
-            p.current_stock += order.quantity
-            p.base_stock_date = datetime(2026, 3, 15) # Reset anchor to reception date
-        order.status = "RECEIVED"; db.session.commit()
-        return jsonify({"status": "success"})
-    return jsonify({"status": "error"}), 400
-
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
     config = Settings.query.first() or Settings()
@@ -193,6 +159,108 @@ def handle_settings():
         run_ai_engine(config.threshold_days)
         return jsonify({"status": "success"})
     return jsonify({"status": "success", "threshold_days": config.threshold_days, "reorder_amount": config.reorder_amount})
+
+def run_ai_engine(thresh):
+    TRAIN_PATH = BASE_DIR / "train.csv"
+    if not TRAIN_PATH.exists(): return
+    
+    # 1. Faster Scan: Reduced to 100k rows for snappy demo performance
+    df = pd.read_csv(TRAIN_PATH, nrows=100000, skiprows=lambda i: i > 0 and i % 5 != 0)
+    df.columns = df.columns.str.lower()
+    df['date'] = pd.to_datetime(df['date'])
+    df['day'] = df['date'].dt.day; df['month'] = df['date'].dt.month
+    df['year'] = df['date'].dt.year; df['dayofweek'] = df['date'].dt.dayofweek
+    
+    # 2. Train Model
+    model = RandomForestRegressor(n_estimators=10, max_depth=8, random_state=42)
+    model.fit(df[['store', 'item', 'day', 'month', 'year', 'dayofweek']], df['sales'])
+    
+    summary = df.groupby(['store', 'item'])['sales'].mean().reset_index()
+    
+    # 3. BATCH PROCESSING LOGIC
+    # We collect all updates first and commit them ONCE at the end
+    try:
+        for _, row in summary.iterrows():
+            sid, iid = int(row['store']), int(row['item'])
+            
+            # Use a slightly faster query for the pooler
+            p = db.session.query(Product).filter_by(item_id=iid, store_id=sid).first()
+            
+            if not p:
+                p = Product(item_id=iid, store_id=sid, current_stock=random.randint(400, 900))
+                db.session.add(p)
+            
+            p.last_forecast = float(row['sales'])
+            p.base_stock_date = datetime(2026, 3, 15)
+
+        # THE MAGIC STEP: One single trip to Supabase for all items
+        db.session.commit()
+        print(f"🚀 Batch Sync Complete: Updated {len(summary)} items.")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Batch Sync Failed: {e}")
+
+# --- OTHER ROUTES (Order, Receive, Suppliers, Auth) ---
+@app.route('/api/order', methods=['POST'])
+def place_order():
+    if 'user_id' not in session: 
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    
+    # 1. Force reload variables inside the function to avoid NameErrors
+    domain = os.getenv("MY_DOMAIN", "fullventoryai.me")
+    api_key = os.getenv("RESEND_API_KEY")
+    admin_email = os.getenv("RECEIVER_EMAIL")
+    
+    data = request.json
+    sid = data.get('store_id')
+    iid = data.get('item_id')
+    qty = data.get('quantity')
+
+    try:
+        # 2. Re-verify API Key assignment
+        resend.api_key = api_key
+        
+        # 3. Lookup Supplier
+        supplier = StoreSupplier.query.filter_by(store_id=sid).first()
+        target_email = supplier.email if supplier else admin_email
+
+        print(f"📧 DEBUG: Sending to {target_email} using domain {domain}")
+
+        # 4. Send Email
+        params = {
+            "from": f"Fullventory AI <orders@{domain}>",
+            "to": [target_email],
+            "subject": f"📦 Restock Order: Item #{iid}",
+            "html": f"<strong>Order for Store {sid}:</strong> Item #{iid} - Qty: {qty}"
+        }
+        
+        email_response = resend.Emails.send(params)
+        print(f"✅ Resend Success: {email_response}")
+
+        # 5. Log to Supabase
+        new_order = OrderHistory(item_id=iid, store_id=sid, quantity=qty, status='PENDING')
+        db.session.add(new_order)
+        db.session.commit()
+        
+        return jsonify({"status": "success"})
+
+    except Exception as e:
+        # This will tell us EXACTLY what is wrong in the console
+        print(f"❌ EMAIL CRITICAL ERROR: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+@app.route('/api/receive', methods=['POST'])
+def receive_order():
+    order = OrderHistory.query.get(request.json.get('order_id'))
+    if order:
+        p = Product.query.filter_by(item_id=order.item_id, store_id=order.store_id).first()
+        if p: 
+            p.current_stock += order.quantity
+            p.base_stock_date = datetime(2026, 3, 15)
+        order.status = "RECEIVED"; db.session.commit()
+        return jsonify({"status": "success"})
+    return jsonify({"status": "error"}), 400
 
 @app.route('/api/suppliers', methods=['GET', 'POST'])
 def handle_suppliers():
@@ -205,47 +273,21 @@ def handle_suppliers():
 
 @app.route('/api/history')
 def get_history():
+    # Fetching latest 10 orders from Supabase
     history = OrderHistory.query.order_by(OrderHistory.order_date.desc()).limit(10).all()
-    return jsonify({"status": "success", "data": [{"id": h.id, "item": h.item_id, "qty": h.quantity, "date": h.order_date.strftime("%m-%d %H:%M"), "status": h.status} for h in history]})
-
-def run_ai_engine(thresh):
-    TRAIN_PATH = BASE_DIR / "train.csv"
-    if not TRAIN_PATH.exists(): return
-    
-    # STARTUP STRATEGY: Instead of just the top, we take a random 10% sample 
-    # of the first 500,000 rows. This gives us high item diversity (50+ items).
-    try:
-        # We read a larger chunk but skip every 5th row to keep memory low
-        df = pd.read_csv(TRAIN_PATH, nrows=500000, skiprows=lambda i: i > 0 and i % 5 != 0)
-        
-        df.columns = df.columns.str.lower()
-        df['date'] = pd.to_datetime(df['date'])
-        df['day'] = df['date'].dt.day; df['month'] = df['date'].dt.month
-        df['year'] = df['date'].dt.year; df['dayofweek'] = df['date'].dt.dayofweek
-        
-        # Features for our AIML model
-        features = ['store', 'item', 'day', 'month', 'year', 'dayofweek']
-        
-        model = RandomForestRegressor(n_estimators=10, max_depth=8, random_state=42, n_jobs=1)
-        model.fit(df[features], df['sales'])
-        
-        # Grouping to find the unique items across all stores
-        summary = df.groupby(['store', 'item'])['sales'].mean().reset_index()
-        
-        for _, row in summary.iterrows():
-            sid, iid = int(row['store']), int(row['item'])
-            p = Product.query.filter_by(item_id=iid, store_id=sid).first()
-            if not p: 
-                # Give them a varied starting stock for a better demo
-                p = Product(item_id=iid, store_id=sid, current_stock=random.randint(300, 950))
-            
-            p.last_forecast = float(row['sales'])
-            p.base_stock_date = datetime(2026, 3, 15)
-            db.session.add(p)
-            
-        db.session.commit()
-    except Exception as e:
-        print(f"AI BigData Sync Error: {e}")
+    return jsonify({
+        "status": "success", 
+        "data": [
+            {
+                "id": h.id, 
+                "store": h.store_id,  # Added this line
+                "item": h.item_id, 
+                "qty": h.quantity, 
+                "date": h.order_date.strftime("%m-%d %H:%M"), 
+                "status": h.status
+            } for h in history
+        ]
+    })
 
 @app.route('/')
 def home(): return redirect(url_for('dashboard')) if 'user_id' in session else redirect(url_for('login_page'))
