@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import pandas as pd
 import resend 
 from datetime import datetime, timedelta
-from flask import Flask, render_template, redirect, url_for, session, jsonify, request, send_file
+from flask import Flask, render_template, redirect, url_for, session, jsonify, request, send_file, flash
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -204,7 +204,7 @@ def run_ai_engine(thresh):
             if not p:
                 p = Product(item_id=iid, store_id=sid, current_stock=random.randint(400, 900))
                 db.session.add(p)
-            
+
             p.last_forecast = float(row['sales'])
             p.base_stock_date = datetime(2026, 3, 15)
 
@@ -305,11 +305,16 @@ def get_history():
     })
 
 @app.route('/')
-def home(): return redirect(url_for('dashboard')) if 'user_id' in session else redirect(url_for('login_page'))
+def landing():
+    return render_template('landing.html') # Public Landing Page
 @app.route('/login')
-def login_page(): return render_template('login.html')
+def login_page():
+    return render_template('login.html') # The Login screen
 @app.route('/dashboard')
-def dashboard(): return render_template('index.html') if 'user_id' in session else redirect(url_for('login_page'))
+def dashboard():
+    if 'user_id' in session:
+        return render_template('index.html') # The Internal Tool we built
+    return redirect(url_for('login_page'))
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.json; user = User.query.filter_by(username=data.get('username')).first()
@@ -318,6 +323,56 @@ def api_login():
     return jsonify({"status": "error"}), 401
 @app.route('/api/logout')
 def logout(): session.pop('user_id', None); return redirect(url_for('login_page'))
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+resend.api_key = os.getenv('RESEND_API_KEY')
+@app.route('/ping')
+def ping():
+    return "PONG", 200
+@app.route('/contact', methods=['POST'])
+def handle_contact():
+    # 1. Capture ALL details from the form
+    fname = request.form.get('first_name')
+    lname = request.form.get('last_name')
+    client_company = request.form.get('company')
+    client_email = request.form.get('visitor_email')
+    subject_type = request.form.get('inquiry_type')
+    details = request.form.get('business_details')
 
+    # 2. Send the structured email to YOUR gmail
+    try:
+        resend.Emails.send({
+            "from": "Fullventory AI <onboarding@resend.dev>", # Update to your domain later
+            "to": "fullventoryai@gmail.com",
+            "reply_to": client_email, # This makes the email "from" the client in your inbox
+            "subject": f"🚨 Inquiry from {client_company}: {subject_type} - {fname} {lname}",
+            "html": f"""
+                <div style="font-family: sans-serif; max-width: 600px; border: 1px solid #eee; padding: 20px; border-radius: 15px;">
+                    <h2 style="color: #3b82f6; margin-top: 0;">New Inquiry Received</h2>
+                    <p style="font-size: 14px; color: #666;">You have a new lead from the Fullventory AI landing page.</p>
+                    
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                        <p><strong>Client Name:</strong> {fname} {lname}</p>
+                        <p><strong>Work Email:</strong> {client_email}</p>
+                        <p><strong>Inquiry Type:</strong> {subject_type}</p>
+                    </div>
+
+                    <p><strong>Business Details:</strong></p>
+                    <div style="padding: 15px; border-left: 4px solid #3b82f6; background: #f0f7ff;">
+                        {details}
+                    </div>
+                    
+                    <p style="font-size: 11px; color: #999; margin-top: 30px;">
+                        Note: To reply to this client, simply hit "Reply" in your email client.
+                    </p>
+                </div>
+            """
+        })
+        flash("Message sent! We will contact you shortly.", "success")
+    except Exception as e:
+        flash(f"System Error: {str(e)}", "error")
+
+    return redirect(url_for('contact'))
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

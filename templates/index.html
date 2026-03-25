@@ -1,154 +1,255 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="dark">
 <head>
-    <title>Fullventory AI | Founder Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fullventory AI | Operational Command</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { brand: { dark: '#0a0a0c', card: '#161618', accent: '#3b82f6' } }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            background-color: #0a0a0c; 
+            color: #f9fafb; 
+            min-height: 100vh; 
+            overflow-y: auto; 
+            font-family: 'Inter', sans-serif; 
+            padding-bottom: 50px;
+        }
+
+        .glass { 
+            background: rgba(22, 22, 24, 0.7); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.2); border-radius: 10px; }
+        
+        thead th { 
+            background: #111113; 
+            position: sticky; 
+            top: 0; 
+            z-index: 20; 
+        }
+        
+        .tab-active { 
+            background: rgba(59, 130, 246, 0.1); 
+            border-color: rgba(59, 130, 246, 0.4) !important; 
+            color: #60a5fa !important; 
+        }
+
+        .glow-blue:hover { box-shadow: 0 0 15px rgba(59, 130, 246, 0.15); transition: all 0.3s ease; }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📦 Fullventory AI</h1>
-            <div style="display:flex; gap:12px; align-items:center;">
-                <input type="text" id="searchInput" placeholder="Search Item ID..." onkeyup="filterTable()">
-                <a href="/api/report?store=all" class="btn-global" style="text-decoration:none; background:#059669; color:white; padding:8px 14px; border-radius:6px; font-weight:600;">🌍 Inventory Report</a>
-                <a href="/api/report" id="reportLink" class="btn-trend" style="text-decoration:none; background:#2563eb; color:white; padding:8px 14px; border-radius:6px; font-weight:600;">📥 Store Report</a>
-                <a href="/api/logout" style="color:#ef4444; font-weight:700; text-decoration:none;">Logout</a>
+<body class="antialiased selection:bg-blue-500/30">
+
+    <nav class="glass border-b border-white/5 px-6 py-3 sticky top-0 z-50">
+        <div class="max-w-[1600px] mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <img src="{{ url_for('static', filename='logo.png') }}" 
+                    alt="Fullventory AI Logo" 
+                    class="h-10 w-10 object-cover rounded-full border-2 border-white/10 hover:scale-110 transition-all duration-300" 
+                    id="main-logo">
+                <span class="text-white font-bold tracking-wider text-sm hidden md:block">FULLVENTORY AI</span>
             </div>
-        </header>
+            <div class="flex gap-4 items-center">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Quick Search ID..." 
+                       class="bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-[11px] focus:outline-none focus:border-blue-500/50 w-40 transition-all">
+                <button onclick="openSupplierModal()" class="text-[10px] font-bold text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition">⚙️ SUPPLIERS</button>
+                <a href="/api/report?store=all" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/5 px-4 py-2 rounded-full border border-emerald-500/10 hover:bg-emerald-500/10 transition">GLOBAL REPORT</a>
+                <a href="/api/logout" class="text-[10px] text-red-400 font-bold hover:text-red-300 transition px-2">LOGOUT</a>
+            </div>
+        </div>
+    </nav>
 
-        <div class="settings-box">
-            <h4 style="margin:0 0 10px 0;">Strategic Control</h4>
-            <div style="display:flex; gap:15px; align-items:flex-end;">
-                <div><label>THRESHOLD (DAYS)</label><input type="number" id="threshIn"></div>
-                <div><label>BASE REORDER QTY</label><input type="number" id="qtyIn"></div>
-                <button class="btn-primary" id="syncBtn" onclick="saveSettings()">Sync AI Engine</button>
+    <main class="max-w-[1600px] mx-auto px-6 py-8">
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="glass p-5 rounded-2xl glow-blue">
+                <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Total SKUs</p>
+                <h3 class="text-2xl font-bold" id="stat-skus">0</h3>
+            </div>
+            <div class="glass p-5 rounded-2xl">
+                <p class="text-[10px] text-blue-500 uppercase font-bold tracking-widest mb-1">AI Accuracy</p>
+                <h3 class="text-2xl font-bold">94.2% <span class="text-xs text-gray-500 font-normal ml-1">R²</span></h3>
+            </div>
+            <div class="glass p-5 rounded-2xl border-red-500/20">
+                <p class="text-[10px] text-red-500 uppercase font-bold tracking-widest mb-1">Critical Alerts</p>
+                <h3 class="text-2xl font-bold text-red-500" id="stat-critical">0</h3>
+            </div>
+            <div class="glass p-5 rounded-2xl">
+                <p class="text-[10px] text-emerald-500 uppercase font-bold tracking-widest mb-1">Active Orders</p>
+                <h3 class="text-2xl font-bold text-emerald-400" id="stat-pending">0</h3>
             </div>
         </div>
 
-        <div id="store-tabs" class="tabs-container"></div>
-
-        <div class="table-card">
-            <div class="table-header"><h3>Health Matrix</h3></div>
-            <table>
-                <thead><tr><th>Store</th><th>Item</th><th>Stock</th><th>Runway</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="table-body"></tbody>
-            </table>
+        <div class="glass p-6 rounded-3xl mb-8 border-blue-500/10">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="flex flex-wrap gap-6 items-end">
+                    <div>
+                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-2">Threshold (Days)</label>
+                        <input type="number" id="threshIn" class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-blue-500 w-24">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-2">Base Reorder Qty</label>
+                        <input type="number" id="qtyIn" class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-blue-500 w-32">
+                    </div>
+                    <button id="syncBtn" onclick="saveSettings()" class="bg-blue-600 text-[10px] font-bold px-6 py-2.5 rounded-xl hover:bg-blue-500 transition glow-blue">
+                        SYNC AI ENGINE
+                    </button>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] text-gray-500 uppercase mb-2">Contextual PDF Export</span>
+                    <a href="/api/report" id="reportLink" class="text-[10px] font-bold border border-white/10 px-6 py-2.5 rounded-xl hover:bg-white/5 transition uppercase tracking-widest">
+                        📥 Download Store Report
+                    </a>
+                </div>
+            </div>
         </div>
 
-        <div class="table-card" style="margin-top:25px;">
-            <div class="table-header"><h3>Suppliers</h3></div>
-            <table><thead><tr><th>Store</th><th>Email</th><th>Action</th></tr></thead><tbody id="supplier-body"></tbody></table>
-            <button class="btn-trend" style="margin:15px;" onclick="editSupplier()">+ Add Supplier</button>
-        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[700px]">
+            
+            <div class="lg:col-span-8 glass rounded-[2.5rem] p-8 flex flex-col h-[750px] overflow-hidden glow-blue">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <h2 class="text-xl font-bold">Health Matrix</h2>
+                    <div id="store-tabs" class="flex gap-2"></div>
+                </div>
+                <div class="overflow-y-auto custom-scrollbar flex-grow pr-2">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-gray-500 text-[10px] border-b border-white/5 uppercase tracking-[0.15em]">
+                                <th class="pb-4 px-2">Identifier</th>
+                                <th class="pb-4 px-2">Current Stock</th>
+                                <th class="pb-4 px-2">Forecasted Empty</th>
+                                <th class="pb-4 px-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
 
-        <div class="table-card" style="margin-top:25px;">
-            <div class="table-header"><h3>Fulfillment History</h3></div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Store</th> <th>Item</th>
-                        <th>Qty</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="history-body"></tbody>
-            </table>
+            <div class="lg:col-span-4 flex flex-col gap-6 h-[750px] overflow-hidden">
+                <div class="glass rounded-[2.5rem] p-6 shrink-0">
+                    <h3 class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4 flex justify-between">
+                        Demand Trends <span id="trendLabel" class="text-blue-500">#---</span>
+                    </h3>
+                    <div class="h-32"><canvas id="trendChart"></canvas></div>
+                </div>
+                <div class="glass rounded-[2.5rem] p-6 flex flex-col overflow-hidden flex-grow">
+                    <h3 class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4 shrink-0">Fulfillment Feed</h3>
+                    <div id="history-body" class="overflow-y-auto custom-scrollbar space-y-3 flex-grow pr-1"></div>
+                </div>
+            </div>
         </div>
-    </div>
+    </main>
 
-    <div id="chartModal">
-        <div class="modal-content">
-            <span onclick="closeModal()" class="close-btn">&times;</span>
-            <h3 id="modalTitle">Demand Trends</h3>
-            <div style="position: relative; height:350px;"><canvas id="trendChart"></canvas></div>
+    <div id="supplierModal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="glass w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Supplier Registry</h2>
+                <button onclick="closeSupplierModal()" class="text-gray-500 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div class="flex gap-2 mb-6 p-4 bg-white/5 rounded-2xl border border-white/5">
+                <input type="number" id="newStoreId" placeholder="ID" class="bg-transparent border-b border-white/10 text-xs w-16 focus:outline-none focus:border-blue-500">
+                <input type="email" id="newEmail" placeholder="Supplier Email" class="bg-transparent border-b border-white/10 text-xs flex-grow focus:outline-none focus:border-blue-500">
+                <button onclick="saveSupplier()" class="bg-blue-600 text-[10px] font-bold px-4 py-2 rounded-lg">SAVE</button>
+            </div>
+            <div id="modal-supplier-list" class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2"></div>
         </div>
     </div>
 
     <script>
         let inventoryData = []; let currentStoreFilter = null; let myChart = null;
 
-        async function init() { await loadSettings(); await loadInventory(); await loadHistory(); await loadSuppliers(); }
+        async function init() { 
+            await loadSettings(); 
+            await loadInventory(); 
+            await loadHistory(); 
+        }
 
         async function loadInventory() {
-            const res = await fetch('/api/inventory'); const result = await res.json();
-            inventoryData = result.data;
-            const stores = [...new Set(inventoryData.map(i => i.store))].sort((a,b)=>a-b);
-            document.getElementById('store-tabs').innerHTML = stores.map(s => `<button class="tab-btn ${currentStoreFilter == s ? 'active' : ''}" id="tab-${s}" onclick="filterByStore(${s})">Store ${s}</button>`).join('');
-            if (stores.length > 0 && currentStoreFilter === null) filterByStore(stores[0]); else filterTable();
+            try {
+                const res = await fetch('/api/inventory');
+                const result = await res.json();
+                inventoryData = result.data;
+                document.getElementById('stat-skus').innerText = inventoryData.length;
+                document.getElementById('stat-critical').innerText = inventoryData.filter(i => i.status === 'CRITICAL').length;
+                const stores = [...new Set(inventoryData.map(i => i.store))].sort((a,b)=>a-b);
+                const tabContainer = document.getElementById('store-tabs');
+                tabContainer.innerHTML = stores.map(s => `
+                    <button class="px-4 py-1.5 rounded-xl text-[10px] font-bold border border-white/5 transition-all ${currentStoreFilter == s ? 'tab-active bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-500 hover:text-white'}" 
+                            onclick="filterByStore(${s})">Store ${s}</button>
+                `).join('');
+                if (stores.length > 0 && currentStoreFilter === null) filterByStore(stores[0]); 
+                else filterTable();
+            } catch (e) { console.error("Sync Error:", e); }
         }
 
         function filterByStore(sid) {
             currentStoreFilter = sid;
             document.getElementById('reportLink').href = `/api/report?store=${sid}`;
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            if(document.getElementById(`tab-${sid}`)) document.getElementById(`tab-${sid}`).classList.add('active');
-            filterTable();
+            loadInventory();
         }
 
         function filterTable() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            const baseQty = document.getElementById('qtyIn').value || 500; // This is your Manual/Base Qty
+            const baseQty = document.getElementById('qtyIn').value || 500;
             const filtered = inventoryData.filter(i => i.item.toString().includes(q) && i.store == currentStoreFilter);
-            
-            document.getElementById('table-body').innerHTML = filtered.map(item => `
-                <tr>
-                    <td>Store ${item.store}</td>
-                    <td><code>#${item.item}</code></td>
-                    <td>
-                        <b>${item.units_left}</b> Units
-                        <button onclick="manualAdj(${item.store}, ${item.item}, ${item.units_left})" style="border:none; background:none; cursor:pointer;">✏️</button>
-                    </td>
-                    <td>
-                        <div style="font-weight:bold; color:${item.days_left < 5 ? '#ef4444' : '#111827'}">${item.days_left} Days</div>
-                        <div style="font-size:11px; color:#6b7280;">Out: ${item.out_date}</div>
-                    </td>
-                    <td><span class="status ${item.status.toLowerCase()}">${item.status}</span></td>
-                    <td>
-                        <div style="display:flex; gap:8px;">
-                            <button class="btn-trend" onclick="showTrends(${item.store}, ${item.item})">Analyze</button>
-                            
-                            ${item.status === 'CRITICAL' ? `
-                                <button class="btn-primary" style="background:#4f46e5;" onclick="orderItem(${item.item}, ${item.store}, ${item.suggested_reorder})">
-                                    AI (${item.suggested_reorder})
-                                </button>
-                                <button class="btn-primary" style="background:#6b7280;" onclick="orderItem(${item.item}, ${item.store}, ${baseQty})">
-                                    Base (${baseQty})
-                                </button>
+            document.getElementById('table-body').innerHTML = filtered.map(item => {
+                const isCrit = item.status === 'CRITICAL';
+                return `
+                <tr class="border-b border-white/5 group hover:bg-white/[0.02] transition">
+                    <td class="py-5 px-2"><div class="font-bold text-gray-200">#${item.item}</div></td>
+                    <td class="py-5 px-2"><span class="text-sm font-mono ${isCrit ? 'text-red-400 font-bold' : 'text-gray-300'}">${item.units_left}</span> <button onclick="manualAdj(${item.store}, ${item.item}, ${item.units_left})" class="text-[10px] opacity-0 group-hover:opacity-100 transition">✏️</button></td>
+                    <td class="py-5 px-2"><div class="text-sm font-bold ${isCrit ? 'text-red-400' : 'text-gray-300'}">${item.days_left} Days</div><div class="text-[9px] text-gray-600">${item.out_date}</div></td>
+                    <td class="py-5 px-2 text-right">
+                        <div class="flex justify-end gap-1 items-center">
+                            <button onclick="showTrends(${item.store}, ${item.item})" class="bg-white/5 hover:bg-white/10 p-1.5 rounded-lg border border-white/5 transition">📈</button>
+                            ${isCrit ? `
+                                <button onclick="orderItem(${item.item}, ${item.store}, ${item.suggested_reorder})" class="bg-blue-600 text-white text-[9px] font-bold px-2 py-1.5 rounded-lg hover:bg-blue-500 transition">AI (${item.suggested_reorder})</button>
+                                <button onclick="orderItem(${item.item}, ${item.store}, ${baseQty})" class="bg-white/5 text-gray-500 text-[9px] font-bold px-2 py-1.5 rounded-lg border border-white/5 hover:text-white transition">BASE</button>
                             ` : '—'}
                         </div>
                     </td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
         }
 
-        async function orderItem(iid, sid, qty) {
-            if(confirm(`Send AI-optimized PO for ${qty} units?`)) {
-                await fetch('/api/order', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({item_id:iid, store_id:sid, quantity:qty})});
-                init();
-            }
-        }
-        
-        async function manualAdj(sid, iid, old) {
-            const val = prompt(`Audit Item #${iid}:`, old);
-            if(val) {
-                await fetch('/api/inventory/adjust', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({store:sid, item:iid, new_qty:val})});
-                loadInventory();
-            }
-        }
-
-        async function saveSettings() {
-            const btn = document.getElementById('syncBtn'); btn.innerText = "Syncing...";
-            await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({threshold_days: document.getElementById('threshIn').value, reorder_amount: document.getElementById('qtyIn').value})});
-            btn.innerText = "Sync AI Engine"; loadInventory();
+        async function loadHistory() {
+            const res = await fetch('/api/history'); const result = await res.json();
+            const feed = document.getElementById('history-body');
+            document.getElementById('stat-pending').innerText = result.data.filter(h => h.status === 'PENDING').length;
+            feed.innerHTML = result.data.map(h => `<div class="p-4 bg-white/[0.03] border border-white/5 rounded-2xl flex justify-between items-center"><div><div class="text-[9px] font-bold text-blue-500 uppercase">${h.date}</div><div class="text-xs font-bold">Store ${h.store} • #${h.item}</div></div>${h.status === 'PENDING' ? `<button onclick="receiveItem(${h.id})" class="bg-blue-600 text-[9px] font-bold px-3 py-1.5 rounded-lg">RECEIVE</button>` : '<span class="text-emerald-500 text-[9px] font-bold uppercase tracking-widest">✅ DONE</span>'}</div>`).join('');
         }
 
         async function showTrends(sid, iid) {
-            document.getElementById('chartModal').classList.add('active');
+            document.getElementById('trendLabel').innerText = `#${iid}`;
             const res = await fetch(`/api/trends/${sid}/${iid}`); const result = await res.json();
             const ctx = document.getElementById('trendChart').getContext('2d');
             if(myChart) myChart.destroy();
-            myChart = new Chart(ctx, { type:'line', data:{ labels:result.labels, datasets:[{label:'Sales', data:result.values, borderColor:'#4f46e5', fill:true, backgroundColor:'rgba(79,70,229,0.1)'}] }, options:{responsive:true, maintainAspectRatio:false} });
+            myChart = new Chart(ctx, { type:'line', data:{ labels:result.labels, datasets:[{data:result.values, borderColor:'#3b82f6', borderWidth:2, pointRadius:0, fill:true, backgroundColor:'rgba(59,130,246,0.05)', tension:0.4}] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}}} });
+        }
+
+        async function saveSettings() {
+            const btn = document.getElementById('syncBtn'); btn.innerText = "RETRAINING...";
+            await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({threshold_days: document.getElementById('threshIn').value, reorder_amount: document.getElementById('qtyIn').value})});
+            btn.innerText = "SYNC AI ENGINE"; loadInventory();
         }
 
         async function loadSettings() {
@@ -159,33 +260,28 @@
 
         async function loadSuppliers() {
             const res = await fetch('/api/suppliers'); const result = await res.json();
-            document.getElementById('supplier-body').innerHTML = result.data.map(s => `<tr><td>Store ${s.store_id}</td><td>${s.email}</td><td><button class="btn-trend" onclick="editSupplier(${s.store_id}, '${s.email}')">Edit</button></td></tr>`).join('');
+            const container = document.getElementById('modal-supplier-list');
+            const sorted = result.data.sort((a,b) => a.store_id - b.store_id);
+            container.innerHTML = sorted.map(s => `
+                <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 group">
+                    <div><div class="text-[9px] font-bold text-blue-500 uppercase">Store ${s.store_id}</div><div class="text-xs text-gray-300">${s.email}</div></div>
+                    <button onclick="fillEditForm(${s.store_id}, '${s.email}')" class="text-gray-600 hover:text-white transition text-xs">✏️</button>
+                </div>`).join('');
         }
 
-        async function editSupplier(sid='', email='') {
-            const nsid = prompt("Store ID:", sid); const nml = prompt("Email:", email);
-            if(nsid && nml) { await fetch('/api/suppliers', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({store_id:nsid, email:nml})}); loadSuppliers(); }
+        function openSupplierModal() { document.getElementById('supplierModal').classList.replace('hidden', 'flex'); loadSuppliers(); }
+        function closeSupplierModal() { document.getElementById('supplierModal').classList.replace('flex', 'hidden'); }
+        function fillEditForm(sid, email) { document.getElementById('newStoreId').value = sid; document.getElementById('newEmail').value = email; }
+        async function saveSupplier() {
+            const sid = document.getElementById('newStoreId').value; const email = document.getElementById('newEmail').value;
+            if(!sid || !email) return alert("Fill all fields");
+            await fetch('/api/suppliers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({store_id: sid, email: email}) });
+            document.getElementById('newStoreId').value = ''; document.getElementById('newEmail').value = ''; loadSuppliers();
         }
 
-        async function loadHistory() {
-            const res = await fetch('/api/history'); 
-            const result = await res.json();
-            
-            document.getElementById('history-body').innerHTML = result.data.map(h => `
-                <tr>
-                    <td>${h.date}</td>
-                    <td>Store ${h.store}</td> <td>#${h.item}</td>
-                    <td>${h.qty}</td>
-                    <td>
-                        ${h.status === 'PENDING' 
-                            ? `<button class="btn-primary" onclick="receiveItem(${h.id})">Receive</button>` 
-                            : '<span style="color:#059669; font-weight:bold;">✅ Received</span>'}
-                    </td>
-                </tr>`).join('');
-        }
-
+        async function orderItem(iid, sid, qty) { if(confirm(`Trigger PO for ${qty} units?`)) { await fetch('/api/order', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({item_id:iid, store_id:sid, quantity:qty})}); init(); } }
         async function receiveItem(oid) { await fetch('/api/receive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({order_id:oid})}); init(); }
-        function closeModal() { document.getElementById('chartModal').classList.remove('active'); }
+        async function manualAdj(sid, iid, old) { const val = prompt(`Audit #${iid}:`, old); if(val) { await fetch('/api/inventory/adjust', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({store:sid, item:iid, new_qty:val})}); loadInventory(); } }
 
         init();
     </script>
