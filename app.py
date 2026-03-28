@@ -322,7 +322,7 @@ def api_login():
         session['user_id'] = user.id; return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 401
 @app.route('/api/logout')
-def logout(): session.pop('user_id', None); return redirect(url_for('login_page'))
+def logout(): session.pop('user_id', None); return redirect(url_for('landing'))
 @app.route('/contact')
 def contact():
     return render_template('contact.html')
